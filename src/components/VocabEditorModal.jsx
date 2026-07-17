@@ -21,6 +21,22 @@ export default function VocabEditorModal({
   // Local mutable copy of lists to allow editing without immediately saving to parent
   const [lists, setLists] = useState([]);
   const [selectedListId, setSelectedListId] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isEditingList, setIsEditingList] = useState(false);
+
+  // Monitor screen size for mobile responsive master-detail layout
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const listener = (e) => {
+      setIsMobile(e.matches);
+      if (!e.matches) {
+        setIsEditingList(false);
+      }
+    };
+    setIsMobile(media.matches);
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, []);
 
   // Synchronize local state with passed-in lists on mount/open
   useEffect(() => {
@@ -128,6 +144,7 @@ export default function VocabEditorModal({
     };
     setLists(prev => [...prev, newList]);
     setSelectedListId(newListId);
+    setIsEditingList(true);
   };
 
   // Delete the entire selected list
@@ -141,10 +158,15 @@ export default function VocabEditorModal({
     if (window.confirm(`האם למחוק את הרשימה "${currentList.name}"? (Are you sure you want to delete this list?)`)) {
       const remaining = lists.filter(l => l.id !== selectedListId);
       setLists(remaining);
-      if (remaining.length > 0) {
-        setSelectedListId(remaining[0].id);
+      if (isMobile) {
+        setIsEditingList(false);
+        setSelectedListId(remaining.length > 0 ? remaining[0].id : null);
       } else {
-        setSelectedListId(null);
+        if (remaining.length > 0) {
+          setSelectedListId(remaining[0].id);
+        } else {
+          setSelectedListId(null);
+        }
       }
     }
   };
@@ -179,12 +201,18 @@ export default function VocabEditorModal({
             &times;
           </button>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-            ספריית אוצר מילים (Vocabulary Editor)
+            {isMobile && isEditingList && currentList ? (
+              <span style={{ direction: 'rtl', display: 'inline-block' }}>
+                עריכה: <span style={{ direction: 'ltr', display: 'inline-block' }}>{currentList.name}</span>
+              </span>
+            ) : (
+              'ספריית אוצר מילים (Vocabulary Editor)'
+            )}
           </h3>
         </div>
 
         {/* Modal Split Body */}
-        <div className="vocab-editor-body">
+        <div className={`vocab-editor-body ${isMobile ? 'mobile-view' : 'desktop-view'} ${isEditingList ? 'show-editor' : 'show-directory'}`}>
 
           {/* Left Sidebar: Lists Selector */}
           <aside className="vocab-editor-sidebar">
@@ -194,13 +222,20 @@ export default function VocabEditorModal({
             {lists.map(list => (
               <button
                 key={list.id}
+                type="button"
                 className={`vocab-editor-tab ${selectedListId === list.id ? 'active' : ''}`}
-                onClick={() => setSelectedListId(list.id)}
+                onClick={() => {
+                  setSelectedListId(list.id);
+                  if (isMobile) {
+                    setIsEditingList(true);
+                  }
+                }}
               >
                 {list.type === 'demonstrated' ? '🟢' : '🎯'} {list.name}
               </button>
             ))}
             <button
+              type="button"
               className="btn-add-list"
               onClick={handleCreateNewList}
             >
@@ -210,10 +245,31 @@ export default function VocabEditorModal({
 
           {/* Right Main Panel: Edit Selected List */}
           <main className="vocab-editor-main">
+            {isMobile && isEditingList && (
+              <button
+                type="button"
+                className="vocab-editor-back-btn"
+                onClick={() => setIsEditingList(false)}
+                style={{
+                  alignSelf: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.9rem',
+                  color: 'var(--accent-primary)',
+                  fontWeight: 600,
+                  marginBottom: '0.5rem',
+                  padding: '0.2rem 0'
+                }}
+              >
+                ← Back to Lists
+              </button>
+            )}
+
             {currentList ? (
               <>
                 {/* List Name & Type Classification Inputs */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                <div className="vocab-editor-meta-grid">
                   <div className="form-group">
                     <label className="form-label" htmlFor="vocabListNameInput">List Title / Name</label>
                     <input
@@ -237,8 +293,8 @@ export default function VocabEditorModal({
                       onChange={(e) => handleListTypeChange(e.target.value)}
                       style={{ height: '42px', marginTop: '0px' }}
                     >
-                      <option value="demonstrated">🟢 Known</option>
-                      <option value="target">🎯 Learning</option>
+                      <option value="demonstrated">🟢Known</option>
+                      <option value="target">🎯Practice</option>
                     </select>
                   </div>
                 </div>
@@ -261,6 +317,7 @@ export default function VocabEditorModal({
                         onChange={(e) => handleWordFieldChange(wordIdx, e.target.value)}
                       />
                       <button
+                        type="button"
                         className="btn-delete-row"
                         onClick={() => handleDeleteWordRow(wordIdx)}
                         title="Remove word"
@@ -272,13 +329,14 @@ export default function VocabEditorModal({
 
                   {currentList.words.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                      No words in this list yet. Click Add Row to add words.
+                      No words in this list yet. Click Add Word Row to add words.
                     </div>
                   )}
                 </div>
 
                 {/* Add Word Button */}
                 <button
+                  type="button"
                   className="btn-secondary"
                   onClick={handleAddWordRow}
                   style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.9rem', padding: '0.5rem 1rem' }}
@@ -297,7 +355,7 @@ export default function VocabEditorModal({
         {/* Modal Footer Controls */}
         <div className="vocab-editor-footer">
           {currentList && currentList.id !== 'demonstrated' && currentList.id !== 'target' ? (
-            <button className="btn-danger" onClick={handleDeleteList}>
+            <button type="button" className="btn-danger" onClick={handleDeleteList}>
               🗑️ Delete List
             </button>
           ) : (
@@ -305,18 +363,17 @@ export default function VocabEditorModal({
           )}
 
           <div className="vocab-editor-actions-right">
-            <button className="btn-secondary" onClick={handleResetToSystem}>
-              🔄 Reset to Defaults
+            <button type="button" className="btn-secondary" onClick={handleResetToSystem}>
+              Reset Lists
             </button>
-            <button className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button className="btn-primary" onClick={handleSave}>
-              Save Changes
+            <button type="button" className="btn-primary" onClick={handleSave}>
+              Save
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );

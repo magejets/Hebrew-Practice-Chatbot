@@ -6,6 +6,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+# for my personal developer flow
+fix_notes.md 
 
 node_modules
 dist

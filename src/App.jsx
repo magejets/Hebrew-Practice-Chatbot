@@ -51,8 +51,8 @@ const INITIAL_CHAT_HISTORY = [
 ];
 
 // Default Chat Prompt approved by user
-const DEFAULT_CHAT_PROMPT = 
-`You are a native-born Israeli who has kindly agreed to help your friend practice their Hebrew. They are a beginner.
+const DEFAULT_CHAT_PROMPT =
+  `You are a native-born Israeli who has kindly agreed to help your friend practice their Hebrew. They are a beginner.
 Your absolute, most important rule is that you must ALWAYS speak and reply in the Hebrew language. Do not use English in your replies.
 You must speak at the friend's level, which you can infer from the complexity of the vocabulary and grammar they use in the conversation context, and from the vocabulary lists provided.
 
@@ -63,7 +63,7 @@ If they ask for clarification on a word, circumlocute (explain it using simpler 
 
 // Default Word Definition Prompt approved by user
 const DEFAULT_DEFINITION_PROMPT =
-`Explain the meaning of the Hebrew word/phrase: "{word}"
+  `Explain the meaning of the Hebrew word/phrase: "{word}"
 Do not use the word "{word}" itself, or its immediate root variants, in your explanation.
 Explain it using only simple, basic Hebrew words suitable for a beginner student.
 Do not use English or any other language.
@@ -74,11 +74,11 @@ export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('hebrew_chatbot_api_key') || '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [modelName, setModelName] = useState(() => localStorage.getItem('hebrew_chatbot_model') || 'gemini-3.1-flash-lite');
-  
-  const [systemPrompt, setSystemPrompt] = useState(() => 
+
+  const [systemPrompt, setSystemPrompt] = useState(() =>
     localStorage.getItem('hebrew_chatbot_system_prompt') || DEFAULT_CHAT_PROMPT
   );
-  const [definitionPrompt, setDefinitionPrompt] = useState(() => 
+  const [definitionPrompt, setDefinitionPrompt] = useState(() =>
     localStorage.getItem('hebrew_chatbot_def_prompt') || DEFAULT_DEFINITION_PROMPT
   );
 
@@ -90,7 +90,7 @@ export default function App() {
   const [vocabLists, setVocabLists] = useState(() => {
     const savedLists = localStorage.getItem('hebrew_chatbot_all_vocab_lists');
     let loaded = savedLists ? JSON.parse(savedLists) : DEFAULT_VOCABULARY_LISTS;
-    
+
     // Normalise structure to string arrays and ensure type property exists
     loaded = loaded.map(list => ({
       ...list,
@@ -127,8 +127,40 @@ export default function App() {
   const [selectedWordDef, setSelectedWordDef] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('hebrew_chatbot_theme') || 'dark');
   const [isVocabEditorOpen, setIsVocabEditorOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showTip, setShowTip] = useState(() => localStorage.getItem('hebrew_chatbot_hide_word_tip') !== 'true');
+  const [sectionsExpanded, setSectionsExpanded] = useState(() => {
+    const hasKey = !!(localStorage.getItem('hebrew_chatbot_api_key') || '');
+    return {
+      connection: !hasKey,
+      vocab: true,
+      prompts: false
+    };
+  });
 
   const messagesEndRef = useRef(null);
+
+  // Monitor screen size to handle responsive drawer behaviors
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const listener = (e) => {
+      setIsMobile(e.matches);
+      if (!e.matches) {
+        setIsSidebarOpen(false);
+      }
+    };
+    setIsMobile(media.matches);
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, []);
+
+  const toggleSection = (section) => {
+    setSectionsExpanded(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   // Apply Theme on load and when changed
   useEffect(() => {
@@ -163,7 +195,7 @@ export default function App() {
 
   // Toggle Vocabulary List Checkbox
   const handleToggleVocabList = (id) => {
-    setActiveVocabIds((prev) => 
+    setActiveVocabIds((prev) =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
@@ -177,7 +209,7 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target.result);
-        
+
         // Validation check for array of items
         if (!Array.isArray(parsed)) {
           alert('Upload failed: JSON must be an array of lists.');
@@ -221,7 +253,7 @@ export default function App() {
   const handleSaveVocabLists = (newLists) => {
     setVocabLists(newLists);
     localStorage.setItem('hebrew_chatbot_all_vocab_lists', JSON.stringify(newLists));
-    
+
     // Ensure activeVocabIds doesn't contain deleted list IDs
     const newIds = newLists.map(l => l.id);
     setActiveVocabIds(prev => prev.filter(id => newIds.includes(id)));
@@ -363,7 +395,7 @@ export default function App() {
               changed = true;
             }
           });
-          
+
           // Also add other words they typed (excluding clarification targets) to Demonstrated/Known list
           typedWords.forEach(word => {
             if (!targetWords.includes(word) && !knownSet.has(word)) {
@@ -434,9 +466,9 @@ export default function App() {
       // 5. Append Assistant Message
       setChatHistory(prev => [
         ...prev,
-        { 
-          id: `msg_${Date.now()}`, 
-          sender: 'assistant', 
+        {
+          id: `msg_${Date.now()}`,
+          sender: 'assistant',
           text: parsedText,
           definitions: definitionsMap
         }
@@ -445,11 +477,11 @@ export default function App() {
       console.error(err);
       setChatHistory(prev => [
         ...prev,
-        { 
-          id: `msg_${Date.now()}_err`, 
-          sender: 'assistant', 
+        {
+          id: `msg_${Date.now()}_err`,
+          sender: 'assistant',
           text: `שגיאה בהתחברות לשרת. נא לבדוק את חיבור האינטרנט ומפתח ה-API. (Error connecting. Please check your internet connection and API Key.)\nDetails: ${err.message}`,
-          isError: true 
+          isError: true
         }
       ]);
     } finally {
@@ -463,6 +495,12 @@ export default function App() {
     const cleanWord = stripNiqqud(word).trim();
     const definition = messageDefinitions ? messageDefinitions[cleanWord] : null;
     setSelectedWordDef(definition);
+
+    // Auto-dismiss the word definition tip banner on the first click and persist choice
+    if (showTip) {
+      setShowTip(false);
+      localStorage.setItem('hebrew_chatbot_hide_word_tip', 'true');
+    }
 
     // If word clicked to view definition, add to 'target' (Learning) list automatically
     if (cleanWord) {
@@ -492,208 +530,278 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Drawer Backdrop for Mobile */}
+      {isMobile && isSidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar Section */}
-      <aside className="sidebar">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Settings & Vocab</h2>
-          <span style={{ fontSize: '1.5rem' }}>⚙️</span>
+          {isMobile ? (
+            <button
+              className="sidebar-close-btn"
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Close settings menu"
+              style={{ fontSize: '1.25rem', cursor: 'pointer', padding: '0.2rem' }}
+            >
+              ✕
+            </button>
+          ) : (
+            <span style={{ fontSize: '1.5rem' }}>⚙️</span>
+          )}
         </div>
 
         {/* API Configuration */}
-        <div className="sidebar-section">
-          <div className="sidebar-title">Gemini API Connection</div>
-          
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label className="form-label" htmlFor="apiKeyInput">Gemini API Key</label>
-              <button 
-                onClick={() => setShowApiKey(!showApiKey)}
-                style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 500 }}
-              >
-                {showApiKey ? 'Hide' : 'Show'}
-              </button>
-            </div>
-            <input 
-              id="apiKeyInput"
-              type={showApiKey ? "text" : "password"}
-              className="input-field"
-              placeholder="AIzaSy..."
-              value={apiKey}
-              onChange={apiKeyChange => handleApiKeyChange(apiKeyChange)}
-            />
-            {/* Connection test removed to protect Requests Per Minute (RPM) limits */}
-          </div>
+        <div className="sidebar-accordion">
+          <button
+            type="button"
+            className="sidebar-accordion-header"
+            onClick={() => toggleSection('connection')}
+            aria-expanded={sectionsExpanded.connection}
+          >
+            <span className="sidebar-title">Gemini API Connection</span>
+            <span className={`chevron ${sectionsExpanded.connection ? 'open' : ''}`}>▼</span>
+          </button>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="modelSelect">Gemini Model</label>
-            <select 
-              id="modelSelect"
-              className="select-input"
-              value={modelName}
-              onChange={(e) => {
-                setModelName(e.target.value);
-                localStorage.setItem('hebrew_chatbot_model', e.target.value);
-              }}
-            >
-              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Fastest)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-            </select>
+          <div className={`sidebar-accordion-content ${sectionsExpanded.connection ? 'open' : 'collapsed'}`}>
+            <div className="sidebar-section">
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label" htmlFor="apiKeyInput">Gemini API Key</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 500 }}
+                  >
+                    {showApiKey ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <input
+                  id="apiKeyInput"
+                  type={showApiKey ? "text" : "password"}
+                  className="input-field"
+                  placeholder="AIzaSy..."
+                  value={apiKey}
+                  onChange={apiKeyChange => handleApiKeyChange(apiKeyChange)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="modelSelect">Gemini Model</label>
+                <select
+                  id="modelSelect"
+                  className="select-input"
+                  value={modelName}
+                  onChange={(e) => {
+                    setModelName(e.target.value);
+                    localStorage.setItem('hebrew_chatbot_model', e.target.value);
+                  }}
+                >
+                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Fastest)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Vocabulary Lists */}
-        <div className="sidebar-section">
-          <div className="sidebar-title">Known Vocabulary</div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            Toggle list items so the chatbot knows which vocabulary topics you have already studied.
-          </p>
+        <div className="sidebar-accordion">
+          <button
+            type="button"
+            className="sidebar-accordion-header"
+            onClick={() => toggleSection('vocab')}
+            aria-expanded={sectionsExpanded.vocab}
+          >
+            <span className="sidebar-title">Known Vocabulary</span>
+            <span className={`chevron ${sectionsExpanded.vocab ? 'open' : ''}`}>▼</span>
+          </button>
 
-          {/* Group 1: Demonstrated / Known Lists */}
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
-            <span>🟢 Demonstrated / Known</span>
-          </div>
-          <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
-            {vocabLists.filter(l => l.type === 'demonstrated').map(list => (
-              <div 
-                key={list.id} 
-                className={`vocab-list-item`}
-                onClick={() => handleToggleVocabList(list.id)}
-                style={{
-                  borderColor: activeVocabIds.includes(list.id) ? 'var(--accent-primary)' : 'var(--border-light)',
-                  backgroundColor: activeVocabIds.includes(list.id) ? 'hsla(190, 85%, 42%, 0.05)' : 'var(--bg-primary)'
-                }}
-              >
-                <input 
-                  type="checkbox"
-                  className="vocab-list-checkbox"
-                  checked={activeVocabIds.includes(list.id)}
-                  onChange={() => {}} // toggled on container click
-                />
-                <div className="vocab-list-info">
-                  <span className="vocab-list-name">{list.name}</span>
-                  <span className="vocab-list-count">{list.words.length} words</span>
-                </div>
+          <div className={`sidebar-accordion-content ${sectionsExpanded.vocab ? 'open' : 'collapsed'}`}>
+            <div className="sidebar-section">
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Toggle list items so the chatbot knows which vocabulary topics you have already studied.
+              </p>
+
+              {/* Group 1: Demonstrated / Known Lists */}
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
+                <span>🟢 Demonstrated / Known</span>
               </div>
-            ))}
-          </div>
-
-          {/* Group 2: Learning / Target Lists */}
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-tertiary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
-            <span>🎯 Learning / Target</span>
-          </div>
-          <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
-            {vocabLists.filter(l => l.type === 'target').map(list => (
-              <div 
-                key={list.id} 
-                className={`vocab-list-item`}
-                onClick={() => handleToggleVocabList(list.id)}
-                style={{
-                  borderColor: activeVocabIds.includes(list.id) ? 'var(--accent-primary)' : 'var(--border-light)',
-                  backgroundColor: activeVocabIds.includes(list.id) ? 'hsla(190, 85%, 42%, 0.05)' : 'var(--bg-primary)'
-                }}
-              >
-                <input 
-                  type="checkbox"
-                  className="vocab-list-checkbox"
-                  checked={activeVocabIds.includes(list.id)}
-                  onChange={() => {}} // toggled on container click
-                />
-                <div className="vocab-list-info">
-                  <span className="vocab-list-name">{list.name}</span>
-                  <span className="vocab-list-count">{list.words.length} words</span>
-                </div>
+              <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
+                {vocabLists.filter(l => l.type === 'demonstrated').map(list => (
+                  <div
+                    key={list.id}
+                    className={`vocab-list-item`}
+                    onClick={() => handleToggleVocabList(list.id)}
+                    style={{
+                      borderColor: activeVocabIds.includes(list.id) ? 'var(--accent-primary)' : 'var(--border-light)',
+                      backgroundColor: activeVocabIds.includes(list.id) ? 'hsla(190, 85%, 42%, 0.05)' : 'var(--bg-primary)'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="vocab-list-checkbox"
+                      checked={activeVocabIds.includes(list.id)}
+                      onChange={() => { }} // toggled on container click
+                    />
+                    <div className="vocab-list-info">
+                      <span className="vocab-list-name">{list.name}</span>
+                      <span className="vocab-list-count">{list.words.length} words</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button 
-              type="button"
-              className="btn-icon-text" 
-              onClick={() => setIsVocabEditorOpen(true)}
-              style={{ flexGrow: 1 }}
-            >
-              ✏️ Edit Lists
-            </button>
-            <label className="btn-upload" style={{ margin: 0, flexGrow: 1 }}>
-              📤 Upload JSON
-              <input 
-                type="file" 
-                accept=".json" 
-                style={{ display: 'none' }} 
-                onChange={handleFileUpload}
-              />
-            </label>
+              {/* Group 2: Learning / Target Lists */}
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-tertiary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
+                <span>🎯 Learning / Target</span>
+              </div>
+              <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
+                {vocabLists.filter(l => l.type === 'target').map(list => (
+                  <div
+                    key={list.id}
+                    className={`vocab-list-item`}
+                    onClick={() => handleToggleVocabList(list.id)}
+                    style={{
+                      borderColor: activeVocabIds.includes(list.id) ? 'var(--accent-primary)' : 'var(--border-light)',
+                      backgroundColor: activeVocabIds.includes(list.id) ? 'hsla(190, 85%, 42%, 0.05)' : 'var(--bg-primary)'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="vocab-list-checkbox"
+                      checked={activeVocabIds.includes(list.id)}
+                      onChange={() => { }} // toggled on container click
+                    />
+                    <div className="vocab-list-info">
+                      <span className="vocab-list-name">{list.name}</span>
+                      <span className="vocab-list-count">{list.words.length} words</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn-icon-text"
+                  onClick={() => setIsVocabEditorOpen(true)}
+                  style={{ flexGrow: 1 }}
+                >
+                  ✏️ Edit Lists
+                </button>
+                <label className="btn-upload" style={{ margin: 0, flexGrow: 1 }}>
+                  📤 Upload JSON
+                  <input
+                    type="file"
+                    accept=".json"
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                  />
+                </label>
+              </div>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                Upload format: Array of list items: <br />
+                <code>{'[{"name": "My Words", "words": [{"hebrew": "לחם", "english": "bread"}]}]'}</code>
+              </p>
+            </div>
           </div>
-          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-            Upload format: Array of list items: <br/>
-            <code>{ '[{"name": "My Words", "words": [{"hebrew": "לחם", "english": "bread"}]}]' }</code>
-          </p>
         </div>
 
         {/* Custom Instructions Customizer */}
-        <div className="sidebar-section" style={{ borderTop: '1px solid var(--border-light)', paddingTop: '1.25rem' }}>
-          <div className="sidebar-title">Prompt System Configuration</div>
-          
-          <div className="form-group">
-            <label className="form-label" htmlFor="chatPromptText">Chat System Instruction</label>
-            <textarea
-              id="chatPromptText"
-              className="input-field"
-              style={{ fontSize: '0.8rem', minHeight: '100px', resize: 'vertical' }}
-              value={systemPrompt}
-              onChange={(e) => {
-                setSystemPrompt(e.target.value);
-                localStorage.setItem('hebrew_chatbot_system_prompt', e.target.value);
-              }}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="defPromptText">Definition System Instruction</label>
-            <textarea
-              id="defPromptText"
-              className="input-field"
-              style={{ fontSize: '0.8rem', minHeight: '80px', resize: 'vertical' }}
-              value={definitionPrompt}
-              onChange={(e) => {
-                setDefinitionPrompt(e.target.value);
-                localStorage.setItem('hebrew_chatbot_def_prompt', e.target.value);
-              }}
-            />
-          </div>
-
-          <button 
-            onClick={handleResetPrompts}
-            style={{ fontSize: '0.75rem', color: 'var(--accent-tertiary)', textDecoration: 'underline', alignSelf: 'flex-start' }}
+        <div className="sidebar-accordion" style={{ borderTop: '1px solid var(--border-light)', paddingTop: '0.75rem' }}>
+          <button
+            type="button"
+            className="sidebar-accordion-header"
+            onClick={() => toggleSection('prompts')}
+            aria-expanded={sectionsExpanded.prompts}
           >
-            Reset Prompts to Defaults
+            <span className="sidebar-title">Prompt System Configuration</span>
+            <span className={`chevron ${sectionsExpanded.prompts ? 'open' : ''}`}>▼</span>
           </button>
+
+          <div className={`sidebar-accordion-content ${sectionsExpanded.prompts ? 'open' : 'collapsed'}`}>
+            <div className="sidebar-section" style={{ paddingTop: '0.5rem' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="chatPromptText">Chat System Instruction</label>
+                <textarea
+                  id="chatPromptText"
+                  className="input-field"
+                  style={{ fontSize: '0.8rem', minHeight: '100px', resize: 'vertical' }}
+                  value={systemPrompt}
+                  onChange={(e) => {
+                    setSystemPrompt(e.target.value);
+                    localStorage.setItem('hebrew_chatbot_system_prompt', e.target.value);
+                  }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="defPromptText">Definition System Instruction</label>
+                <textarea
+                  id="defPromptText"
+                  className="input-field"
+                  style={{ fontSize: '0.8rem', minHeight: '80px', resize: 'vertical' }}
+                  value={definitionPrompt}
+                  onChange={(e) => {
+                    setDefinitionPrompt(e.target.value);
+                    localStorage.setItem('hebrew_chatbot_def_prompt', e.target.value);
+                  }}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetPrompts}
+                style={{ fontSize: '0.75rem', color: 'var(--accent-tertiary)', textDecoration: 'underline', alignSelf: 'flex-start' }}
+              >
+                Reset Prompts to Defaults
+              </button>
+            </div>
+          </div>
         </div>
       </aside>
 
       {/* Main Chat Interface */}
-      <main className="chat-container">
+      <main className="chat-container" inert={isMobile && isSidebarOpen ? '' : undefined}>
         {/* Header */}
         <header className="chat-header">
-          <div className="chat-header-title">
+          <div className="chat-header-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {isMobile && (
+              <button
+                type="button"
+                className="sidebar-toggle-btn"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                aria-label="Toggle settings menu"
+                aria-expanded={isSidebarOpen}
+                style={{ fontSize: '1.5rem', cursor: 'pointer', padding: '0.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ☰
+              </button>
+            )}
             <span className="app-logo">🇮🇱</span>
             <h1 className="app-title-text">Hebrew Practicer</h1>
           </div>
-          
+
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button 
-              className="btn-icon-text" 
+            <button
+              className="btn-icon-text"
               onClick={handleClearHistory}
               title="Clear chat history"
               style={{ backgroundColor: 'transparent', border: '1px solid var(--border-light)' }}
             >
-              🧹 Clear Chat
+              Clear Chat
             </button>
-            <button 
+            <button
               className="theme-toggle-btn"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               aria-label="Toggle theme"
@@ -707,7 +815,7 @@ export default function App() {
         <div className="messages-area">
           {chatHistory.map((msg) => (
             <div key={msg.id} className={`message-bubble-wrapper ${msg.sender}`}>
-              <div 
+              <div
                 className={`message-bubble ${msg.sender}`}
                 style={msg.isError ? { border: '1px solid var(--accent-tertiary)' } : {}}
               >
@@ -728,21 +836,23 @@ export default function App() {
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
         {/* Informative Tip Banner */}
-        <div style={{ padding: '0 1.5rem', backgroundColor: 'var(--bg-primary)', borderTop: '1px solid var(--border-light)' }}>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            💡 <span>Tip: Click on any Hebrew word in the chatbot's messages above to view a definition in simplified Hebrew!</span>
-          </p>
-        </div>
+        {showTip && (
+          <div style={{ padding: '0 1.5rem', backgroundColor: 'var(--bg-primary)', borderTop: '1px solid var(--border-light)' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              💡 <span>Tip: Click on any Hebrew word in the chatbot's messages above to view a definition in simplified Hebrew!</span>
+            </p>
+          </div>
+        )}
 
         {/* Chat Input form */}
         <form onSubmit={handleSendMessage} className="chat-input-bar">
           <div className="chat-input-wrapper">
-            <input 
+            <input
               className="chat-input"
               style={{ direction: 'ltr' }} // User inputs text, can be Hebrew or English
               type="text"
@@ -752,13 +862,26 @@ export default function App() {
               disabled={isGenerating}
             />
           </div>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn-send"
             disabled={isGenerating || !inputMessage.trim()}
             aria-label="Send Message"
           >
-            ✈️
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              className="send-icon"
+              aria-hidden="true"
+            >
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
           </button>
         </form>
       </main>
