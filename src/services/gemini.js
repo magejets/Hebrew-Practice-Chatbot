@@ -38,7 +38,7 @@ export async function sendChatMessage({
   apiKey,
   modelName = 'gemini-2.5-flash',
   systemInstruction,
-  activeVocabularies = [],
+  activeWords = [],
   history = [],
   userMessage,
 }) {
@@ -48,16 +48,10 @@ export async function sendChatMessage({
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // Build vocabulary context string
+  // Build vocabulary context string from a flat, de-duplicated array of active words
   let vocabContext = '';
-  if (activeVocabularies.length > 0) {
-    vocabContext = '\n\nHere are the VOCABULARY LISTS containing words the student is ALREADY familiar with. Try to use these words as much as possible. If you need to use words outside this list, circumlocute them in simple Hebrew:\n';
-    activeVocabularies.forEach((list) => {
-      vocabContext += `\nList: ${list.name}\n`;
-      list.words.forEach((w) => {
-        vocabContext += `- ${w.hebrew} (${w.transliteration || ''}): ${w.english}\n`;
-      });
-    });
+  if (activeWords.length > 0) {
+    vocabContext = '\n\nHere is a list of Hebrew words the student is ALREADY familiar with. Try to use these words as much as possible. If you need to use words outside this list, circumlocute them in simple Hebrew:\n[' + activeWords.join(', ') + ']\n';
   }
 
   // Instruct the model to return a structured JSON object
@@ -159,7 +153,7 @@ export async function getWordDefinition({
   modelName = 'gemini-2.5-flash',
   word,
   definitionPrompt,
-  activeVocabularies = [],
+  activeWords = [],
 }) {
   if (!apiKey) {
     throw new Error('API Key is required.');
@@ -169,13 +163,8 @@ export async function getWordDefinition({
 
   // Let's customize the definition prompt with vocabulary constraints if provided
   let contextSnippet = '';
-  if (activeVocabularies.length > 0) {
-    contextSnippet = '\nThe student is familiar with these Hebrew words. Try to define the word using only these or even simpler Hebrew words:\n';
-    activeVocabularies.forEach((list) => {
-      list.words.forEach((w) => {
-        contextSnippet += `${w.hebrew}, `;
-      });
-    });
+  if (activeWords.length > 0) {
+    contextSnippet = '\nThe student is familiar with these Hebrew words. Try to define the word using only these or even simpler Hebrew words:\n[' + activeWords.join(', ') + ']\n';
   }
 
   const systemInstruction = definitionPrompt + contextSnippet;

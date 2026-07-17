@@ -4,57 +4,30 @@ import WordDefinitionModal from './components/WordDefinitionModal';
 import VocabEditorModal from './components/VocabEditorModal';
 import { sendChatMessage } from './services/gemini';
 
-// Pre-loaded high-quality vocabulary lists for beginner students
+// Pre-loaded high-quality vocabulary lists for beginner students (Hebrew only strings)
 const DEFAULT_VOCABULARY_LISTS = [
   {
     id: 'greetings',
     name: 'Greetings & Basics',
-    words: [
-      { hebrew: 'שלום', transliteration: 'shalom', english: 'hello / peace' },
-      { hebrew: 'בוקר טוב', transliteration: 'boker tov', english: 'good morning' },
-      { hebrew: 'ערב טוב', transliteration: 'erev tov', english: 'good evening' },
-      { hebrew: 'תודה', transliteration: 'toda', english: 'thank you' },
-      { hebrew: 'בבקשה', transliteration: 'bevakasha', english: 'please / you are welcome' },
-      { hebrew: 'מה נשמע', transliteration: 'ma nishma', english: 'how are you / what is heard' },
-      { hebrew: 'להתראות', transliteration: 'lehitraot', english: 'goodbye / see you' },
-      { hebrew: 'סליחה', transliteration: 'slicha', english: 'excuse me / sorry' },
-      { hebrew: 'נכון', transliteration: 'nachon', english: 'correct / right' },
-      { hebrew: 'טוב', transliteration: 'tov', english: 'good' },
-    ]
+    words: ['שלום', 'בוקר טוב', 'ערב טוב', 'תודה', 'בבקשה', 'מה נשמע', 'להתראות', 'סליחה', 'נכון', 'טוב']
   },
   {
     id: 'dining',
     name: 'Food & Dining',
-    words: [
-      { hebrew: 'מים', transliteration: 'mayim', english: 'water' },
-      { hebrew: 'לחם', transliteration: 'lechem', english: 'bread' },
-      { hebrew: 'ירקות', transliteration: 'yerakot', english: 'vegetables' },
-      { hebrew: 'פירות', transliteration: 'peirot', english: 'fruits' },
-      { hebrew: 'מסעדה', transliteration: 'misada', english: 'restaurant' },
-      { hebrew: 'טעים', transliteration: 'taim', english: 'tasty / delicious' },
-      { hebrew: 'קפה', transliteration: 'kafe', english: 'coffee' },
-      { hebrew: 'אוכל', transliteration: 'ochel', english: 'food' },
-      { hebrew: 'חלב', transliteration: 'chalav', english: 'milk' },
-      { hebrew: 'גבינה', transliteration: 'gvina', english: 'cheese' },
-    ]
+    words: ['מים', 'לחם', 'ירקות', 'פירות', 'מסעדה', 'טעים', 'קפה', 'אוכל', 'חלב', 'גבינה']
   },
   {
     id: 'family',
     name: 'Family & Home',
-    words: [
-      { hebrew: 'אבא', transliteration: 'aba', english: 'father / dad' },
-      { hebrew: 'אמא', transliteration: 'ima', english: 'mother / mom' },
-      { hebrew: 'חבר', transliteration: 'chaver', english: 'friend / member' },
-      { hebrew: 'ילד', transliteration: 'yeled', english: 'child / boy' },
-      { hebrew: 'בית', transliteration: 'bayit', english: 'house / home' },
-      { hebrew: 'משפחה', transliteration: 'mishpacha', english: 'family' },
-      { hebrew: 'אח', transliteration: 'ach', english: 'brother' },
-      { hebrew: 'אחות', transliteration: 'achot', english: 'sister' },
-      { hebrew: 'חדר', transliteration: 'cheder', english: 'room' },
-      { hebrew: 'ספר', transliteration: 'sefer', english: 'book' },
-    ]
+    words: ['אבא', 'אמא', 'חבר', 'ילד', 'בית', 'משפחה', 'אח', 'אחות', 'חדר', 'ספר']
   }
 ];
+
+// Helper to strip Hebrew vowel points (niqqud) and diacritics
+function stripNiqqud(word) {
+  if (!word) return '';
+  return word.replace(/[\u05B0-\u05C7]/g, '');
+}
 
 // Initial welcome message from the assistant
 const INITIAL_CHAT_HISTORY = [
@@ -113,12 +86,28 @@ export default function App() {
 
   const [vocabLists, setVocabLists] = useState(() => {
     const savedLists = localStorage.getItem('hebrew_chatbot_all_vocab_lists');
-    return savedLists ? JSON.parse(savedLists) : DEFAULT_VOCABULARY_LISTS;
+    let loaded = savedLists ? JSON.parse(savedLists) : DEFAULT_VOCABULARY_LISTS;
+    
+    // Normalise any legacy structure to string arrays and filter out empty strings
+    loaded = loaded.map(list => ({
+      ...list,
+      words: list.words.map(w => typeof w === 'object' ? (w.hebrew || '') : w).filter(w => w.trim() !== '')
+    }));
+
+    // Enforce demonstrated list exists
+    if (!loaded.some(l => l.id === 'demonstrated')) {
+      loaded.push({ id: 'demonstrated', name: 'Demonstrated Vocab', words: [] });
+    }
+    return loaded;
   });
 
   const [activeVocabIds, setActiveVocabIds] = useState(() => {
     const savedActive = localStorage.getItem('hebrew_chatbot_active_vocab');
-    return savedActive ? JSON.parse(savedActive) : ['greetings']; // default active
+    let parsed = savedActive ? JSON.parse(savedActive) : ['greetings']; // default active
+    if (!parsed.includes('demonstrated')) {
+      parsed.push('demonstrated');
+    }
+    return parsed;
   });
 
   const [inputMessage, setInputMessage] = useState('');
@@ -191,10 +180,10 @@ export default function App() {
           return {
             id: `custom_${Date.now()}_${idx}`,
             name: list.name,
-            words: list.words.map(w => ({
-              hebrew: w.hebrew || '',
-              english: w.english || '',
-            })).filter(w => w.hebrew)
+            words: list.words.map(w => {
+              const strVal = typeof w === 'object' ? (w.hebrew || '') : w;
+              return stripNiqqud(strVal).trim();
+            }).filter(w => w.length > 0)
           };
         });
 
@@ -269,16 +258,58 @@ export default function App() {
     setChatHistory(updatedHistory);
     setIsGenerating(true);
 
-    // 2. Resolve Active Vocabularies
-    const activeVocabs = vocabLists.filter(list => activeVocabIds.includes(list.id));
+    // 2. Extract Hebrew words from user message, strip niqqud, and update Demonstrated Vocab
+    const userHebrewWords = (currentMsgText.match(/[\u0590-\u05FF]+/g) || [])
+      .map(w => stripNiqqud(w).trim())
+      .filter(w => w.length > 0);
+
+    let updatedVocabLists = vocabLists;
+    if (userHebrewWords.length > 0) {
+      const demListIdx = vocabLists.findIndex(l => l.id === 'demonstrated');
+      if (demListIdx !== -1) {
+        const demList = vocabLists[demListIdx];
+        const existingWordsSet = new Set(demList.words);
+        let addedAny = false;
+
+        userHebrewWords.forEach(word => {
+          if (!existingWordsSet.has(word)) {
+            existingWordsSet.add(word);
+            addedAny = true;
+          }
+        });
+
+        if (addedAny) {
+          updatedVocabLists = [...vocabLists];
+          updatedVocabLists[demListIdx] = {
+            ...demList,
+            words: Array.from(existingWordsSet)
+          };
+          setVocabLists(updatedVocabLists);
+          localStorage.setItem('hebrew_chatbot_all_vocab_lists', JSON.stringify(updatedVocabLists));
+        }
+      }
+    }
+
+    // 3. Resolve active lists and flatten into a unified, de-duplicated words pool
+    const activeVocabs = updatedVocabLists.filter(list => activeVocabIds.includes(list.id));
+    const activeWordsSet = new Set();
+    activeVocabs.forEach(list => {
+      list.words.forEach(w => {
+        const cleanWord = stripNiqqud(typeof w === 'object' ? (w.hebrew || '') : w).trim();
+        if (cleanWord) {
+          activeWordsSet.add(cleanWord);
+        }
+      });
+    });
+    const flatActiveWords = Array.from(activeWordsSet);
 
     try {
-      // 3. Send API Call (Gemini returns a JSON string in this version)
+      // 4. Send API Call (Gemini returns a JSON string in this version)
       const apiResponseString = await sendChatMessage({
         apiKey,
         modelName,
         systemInstruction: systemPrompt,
-        activeVocabularies: activeVocabs,
+        activeWords: flatActiveWords,
         history: updatedHistory,
         userMessage: currentMsgText
       });
@@ -584,7 +615,7 @@ export default function App() {
           apiKey={apiKey}
           modelName={modelName}
           definitionPrompt={definitionPrompt}
-          activeVocabularies={vocabLists.filter(list => activeVocabIds.includes(list.id))}
+          activeWords={Array.from(new Set(vocabLists.filter(list => activeVocabIds.includes(list.id)).flatMap(list => list.words)))}
           onClose={() => {
             setSelectedWord(null);
             setSelectedWordDef(null);

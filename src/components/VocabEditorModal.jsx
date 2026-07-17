@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 /**
- * VocabEditorModal provides a graphical grid editor for all vocabulary lists.
- * Users can create new lists, modify list names, edit word rows (Hebrew and English),
+ * VocabEditorModal provides a graphical list editor for all vocabulary lists.
+ * Users can create new lists, modify list names, edit word strings (Hebrew only),
  * add blank word rows, delete rows, delete lists, and reset to system defaults.
  * 
  * @param {object} props
@@ -24,11 +24,12 @@ export default function VocabEditorModal({
   // Synchronize local state with passed-in lists on mount/open
   useEffect(() => {
     if (vocabLists && vocabLists.length > 0) {
-      // Deep clone lists to prevent accidental direct mutation
+      // Deep clone lists
       const cloned = vocabLists.map(list => ({
         id: list.id,
         name: list.name,
-        words: list.words.map(w => ({ ...w }))
+        // Standardise words as flat string arrays (mapping objects if legacy format was stored)
+        words: list.words.map(w => typeof w === 'object' ? (w.hebrew || '') : w)
       }));
       setLists(cloned);
       
@@ -59,16 +60,13 @@ export default function VocabEditorModal({
     });
   };
 
-  // Handle cell edits (Hebrew or English) for specific word row index
-  const handleWordFieldChange = (wordIdx, field, value) => {
+  // Handle changes to word text
+  const handleWordFieldChange = (wordIdx, value) => {
     if (currentListIndex === -1) return;
     setLists(prev => {
       const copy = [...prev];
       const updatedWords = [...copy[currentListIndex].words];
-      updatedWords[wordIdx] = {
-        ...updatedWords[wordIdx],
-        [field]: value
-      };
+      updatedWords[wordIdx] = value;
       copy[currentListIndex] = {
         ...copy[currentListIndex],
         words: updatedWords
@@ -82,7 +80,7 @@ export default function VocabEditorModal({
     if (currentListIndex === -1) return;
     setLists(prev => {
       const copy = [...prev];
-      const updatedWords = [...copy[currentListIndex].words, { hebrew: '', english: '' }];
+      const updatedWords = [...copy[currentListIndex].words, ''];
       copy[currentListIndex] = {
         ...copy[currentListIndex],
         words: updatedWords
@@ -111,7 +109,7 @@ export default function VocabEditorModal({
     const newList = {
       id: newListId,
       name: 'New Vocabulary List',
-      words: [{ hebrew: '', english: '' }]
+      words: ['']
     };
     setLists(prev => [...prev, newList]);
     setSelectedListId(newListId);
@@ -141,11 +139,11 @@ export default function VocabEditorModal({
 
   // Save changes back to parent
   const handleSave = () => {
-    // Filter out completely empty rows from lists before saving
+    // Filter out completely empty rows and empty lists
     const cleanedLists = lists.map(list => ({
       ...list,
-      words: list.words.filter(w => w.hebrew.trim() !== '' || w.english.trim() !== '')
-    })).filter(list => list.name.trim() !== ''); // Keep lists with names
+      words: list.words.map(w => w.trim()).filter(w => w !== '')
+    })).filter(list => list.name.trim() !== '');
 
     onSave(cleanedLists);
     onClose();
@@ -209,10 +207,9 @@ export default function VocabEditorModal({
                 </div>
 
                 {/* Grid Word Headers */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.75rem', padding: '0 0.75rem', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', padding: '0 0.75rem', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   <span>Hebrew Word / Phrase (עברית)</span>
-                  <span>English Translation</span>
-                  <span style={{ width: '32px' }}></span> {/* Blank space for delete button header */}
+                  <span style={{ width: '32px' }}></span>
                 </div>
 
                 {/* Word Rows Editor Area */}
@@ -223,15 +220,8 @@ export default function VocabEditorModal({
                         type="text"
                         className="vocab-editor-row-input hebrew"
                         placeholder="שלום"
-                        value={word.hebrew}
-                        onChange={(e) => handleWordFieldChange(wordIdx, 'hebrew', e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        className="vocab-editor-row-input english"
-                        placeholder="hello / peace"
-                        value={word.english}
-                        onChange={(e) => handleWordFieldChange(wordIdx, 'english', e.target.value)}
+                        value={word}
+                        onChange={(e) => handleWordFieldChange(wordIdx, e.target.value)}
                       />
                       <button
                         className="btn-delete-row"
