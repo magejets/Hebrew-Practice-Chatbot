@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 /**
  * VocabEditorModal provides a graphical list editor for all vocabulary lists.
  * Users can create new lists, modify list names, edit word strings (Hebrew only),
- * add blank word rows, delete rows, delete lists, and reset to system defaults.
+ * classify lists as Demonstrated (Known) or Target (Learning), add blank word rows,
+ * delete rows, delete lists, and reset to system defaults.
  * 
  * @param {object} props
  * @param {Array<object>} props.vocabLists All current vocabulary lists
@@ -28,11 +29,11 @@ export default function VocabEditorModal({
       const cloned = vocabLists.map(list => ({
         id: list.id,
         name: list.name,
-        // Standardise words as flat string arrays (mapping objects if legacy format was stored)
+        type: list.type || 'demonstrated', // preserve list type
         words: list.words.map(w => typeof w === 'object' ? (w.hebrew || '') : w)
       }));
       setLists(cloned);
-      
+
       // Select first list by default if none is selected
       if (!selectedListId || !cloned.some(l => l.id === selectedListId)) {
         setSelectedListId(cloned[0].id);
@@ -55,6 +56,19 @@ export default function VocabEditorModal({
       copy[currentListIndex] = {
         ...copy[currentListIndex],
         name: newName
+      };
+      return copy;
+    });
+  };
+
+  // Handle changes to list classification
+  const handleListTypeChange = (newType) => {
+    if (currentListIndex === -1) return;
+    setLists(prev => {
+      const copy = [...prev];
+      copy[currentListIndex] = {
+        ...copy[currentListIndex],
+        type: newType
       };
       return copy;
     });
@@ -109,6 +123,7 @@ export default function VocabEditorModal({
     const newList = {
       id: newListId,
       name: 'New Vocabulary List',
+      type: 'target', // default custom lists to active learning/target
       words: ['']
     };
     setLists(prev => [...prev, newList]);
@@ -118,6 +133,11 @@ export default function VocabEditorModal({
   // Delete the entire selected list
   const handleDeleteList = () => {
     if (currentListIndex === -1) return;
+    // Don't allow deleting the two structural auto-populating lists
+    if (selectedListId === 'demonstrated' || selectedListId === 'target') {
+      alert('Cannot delete system auto-populating lists.');
+      return;
+    }
     if (window.confirm(`האם למחוק את הרשימה "${currentList.name}"? (Are you sure you want to delete this list?)`)) {
       const remaining = lists.filter(l => l.id !== selectedListId);
       setLists(remaining);
@@ -152,7 +172,7 @@ export default function VocabEditorModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content vocab-editor-content" onClick={(e) => e.stopPropagation()}>
-        
+
         {/* Modal Header */}
         <div className="modal-header">
           <button className="modal-close-btn" onClick={onClose} aria-label="Close">
@@ -165,7 +185,7 @@ export default function VocabEditorModal({
 
         {/* Modal Split Body */}
         <div className="vocab-editor-body">
-          
+
           {/* Left Sidebar: Lists Selector */}
           <aside className="vocab-editor-sidebar">
             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
@@ -177,10 +197,10 @@ export default function VocabEditorModal({
                 className={`vocab-editor-tab ${selectedListId === list.id ? 'active' : ''}`}
                 onClick={() => setSelectedListId(list.id)}
               >
-                📁 {list.name}
+                {list.type === 'demonstrated' ? '🟢' : '🎯'} {list.name}
               </button>
             ))}
-            <button 
+            <button
               className="btn-add-list"
               onClick={handleCreateNewList}
             >
@@ -192,18 +212,35 @@ export default function VocabEditorModal({
           <main className="vocab-editor-main">
             {currentList ? (
               <>
-                {/* List Name Input */}
-                <div className="form-group">
-                  <label className="form-label" htmlFor="vocabListNameInput">List Title / Name</label>
-                  <input
-                    id="vocabListNameInput"
-                    type="text"
-                    className="input-field"
-                    value={currentList.name}
-                    onChange={(e) => handleListNameChange(e.target.value)}
-                    placeholder="Enter list name..."
-                    style={{ fontWeight: 600, fontSize: '1.1rem' }}
-                  />
+                {/* List Name & Type Classification Inputs */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="vocabListNameInput">List Title / Name</label>
+                    <input
+                      id="vocabListNameInput"
+                      type="text"
+                      className="input-field"
+                      value={currentList.name}
+                      disabled={currentList.id === 'demonstrated' || currentList.id === 'target'}
+                      onChange={(e) => handleListNameChange(e.target.value)}
+                      placeholder="Enter list name..."
+                      style={{ fontWeight: 600, fontSize: '1.1rem' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="vocabListTypeSelect">Classification</label>
+                    <select
+                      id="vocabListTypeSelect"
+                      className="select-input"
+                      value={currentList.type || 'demonstrated'}
+                      disabled={currentList.id === 'demonstrated' || currentList.id === 'target'}
+                      onChange={(e) => handleListTypeChange(e.target.value)}
+                      style={{ height: '42px', marginTop: '0px' }}
+                    >
+                      <option value="demonstrated">🟢 Known</option>
+                      <option value="target">🎯 Learning</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Grid Word Headers */}
@@ -259,7 +296,7 @@ export default function VocabEditorModal({
 
         {/* Modal Footer Controls */}
         <div className="vocab-editor-footer">
-          {currentList ? (
+          {currentList && currentList.id !== 'demonstrated' && currentList.id !== 'target' ? (
             <button className="btn-danger" onClick={handleDeleteList}>
               🗑️ Delete List
             </button>

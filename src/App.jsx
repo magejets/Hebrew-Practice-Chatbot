@@ -9,16 +9,19 @@ const DEFAULT_VOCABULARY_LISTS = [
   {
     id: 'greetings',
     name: 'Greetings & Basics',
+    type: 'demonstrated',
     words: ['שלום', 'בוקר טוב', 'ערב טוב', 'תודה', 'בבקשה', 'מה נשמע', 'להתראות', 'סליחה', 'נכון', 'טוב']
   },
   {
     id: 'dining',
     name: 'Food & Dining',
+    type: 'demonstrated',
     words: ['מים', 'לחם', 'ירקות', 'פירות', 'מסעדה', 'טעים', 'קפה', 'אוכל', 'חלב', 'גבינה']
   },
   {
     id: 'family',
     name: 'Family & Home',
+    type: 'demonstrated',
     words: ['אבא', 'אמא', 'חבר', 'ילד', 'בית', 'משפחה', 'אח', 'אחות', 'חדר', 'ספר']
   }
 ];
@@ -88,15 +91,20 @@ export default function App() {
     const savedLists = localStorage.getItem('hebrew_chatbot_all_vocab_lists');
     let loaded = savedLists ? JSON.parse(savedLists) : DEFAULT_VOCABULARY_LISTS;
     
-    // Normalise any legacy structure to string arrays and filter out empty strings
+    // Normalise structure to string arrays and ensure type property exists
     loaded = loaded.map(list => ({
       ...list,
+      type: list.type || (list.id === 'demonstrated' ? 'demonstrated' : 'target'),
       words: list.words.map(w => typeof w === 'object' ? (w.hebrew || '') : w).filter(w => w.trim() !== '')
     }));
 
-    // Enforce demonstrated list exists
+    // Enforce demonstrated (known) auto-list exists
     if (!loaded.some(l => l.id === 'demonstrated')) {
-      loaded.push({ id: 'demonstrated', name: 'Demonstrated Vocab', words: [] });
+      loaded.push({ id: 'demonstrated', name: 'Demonstrated Vocab', type: 'demonstrated', words: [] });
+    }
+    // Enforce target (learning) auto-list exists
+    if (!loaded.some(l => l.id === 'target')) {
+      loaded.push({ id: 'target', name: 'Target Vocab', type: 'target', words: [] });
     }
     return loaded;
   });
@@ -106,6 +114,9 @@ export default function App() {
     let parsed = savedActive ? JSON.parse(savedActive) : ['greetings']; // default active
     if (!parsed.includes('demonstrated')) {
       parsed.push('demonstrated');
+    }
+    if (!parsed.includes('target')) {
+      parsed.push('target');
     }
     return parsed;
   });
@@ -173,6 +184,9 @@ export default function App() {
           return;
         }
 
+        const isKnownImport = window.confirm('Import these lists as "Known / Demonstrated" vocabulary?\n\n- Click OK for Known (🟢 Demonstrated)\n- Click Cancel for Learning (🎯 Target)');
+        const importedType = isKnownImport ? 'demonstrated' : 'target';
+
         const formattedLists = parsed.map((list, idx) => {
           if (!list.name || !Array.isArray(list.words)) {
             throw new Error(`Item at index ${idx} is missing name or words list.`);
@@ -180,6 +194,7 @@ export default function App() {
           return {
             id: `custom_${Date.now()}_${idx}`,
             name: list.name,
+            type: list.type || importedType,
             words: list.words.map(w => {
               const strVal = typeof w === 'object' ? (w.hebrew || '') : w;
               return stripNiqqud(strVal).trim();
@@ -258,65 +273,148 @@ export default function App() {
     setChatHistory(updatedHistory);
     setIsGenerating(true);
 
-    // 2. Extract Hebrew words from user message, strip niqqud, and update Demonstrated Vocab
-    const userHebrewWords = (currentMsgText.match(/[\u0590-\u05FF]+/g) || [])
-      .map(w => stripNiqqud(w).trim())
-      .filter(w => w.length > 0);
+    // 2. Resolve active lists and compile separate pools for Known and Target words
+    const activeVocabs = vocabLists.filter(list => activeVocabIds.includes(list.id));
+    const knownWordsSet = new Set();
+    const targetWordsSet = new Set();
 
-    let updatedVocabLists = vocabLists;
-    if (userHebrewWords.length > 0) {
-      const demListIdx = vocabLists.findIndex(l => l.id === 'demonstrated');
-      if (demListIdx !== -1) {
-        const demList = vocabLists[demListIdx];
-        const existingWordsSet = new Set(demList.words);
-        let addedAny = false;
-
-        userHebrewWords.forEach(word => {
-          if (!existingWordsSet.has(word)) {
-            existingWordsSet.add(word);
-            addedAny = true;
-          }
-        });
-
-        if (addedAny) {
-          updatedVocabLists = [...vocabLists];
-          updatedVocabLists[demListIdx] = {
-            ...demList,
-            words: Array.from(existingWordsSet)
-          };
-          setVocabLists(updatedVocabLists);
-          localStorage.setItem('hebrew_chatbot_all_vocab_lists', JSON.stringify(updatedVocabLists));
-        }
-      }
-    }
-
-    // 3. Resolve active lists and flatten into a unified, de-duplicated words pool
-    const activeVocabs = updatedVocabLists.filter(list => activeVocabIds.includes(list.id));
-    const activeWordsSet = new Set();
     activeVocabs.forEach(list => {
       list.words.forEach(w => {
-        const cleanWord = stripNiqqud(typeof w === 'object' ? (w.hebrew || '') : w).trim();
+        const cleanWord = stripNiqqud(w).trim();
         if (cleanWord) {
-          activeWordsSet.add(cleanWord);
+          if (list.type === 'demonstrated') {
+            knownWordsSet.add(cleanWord);
+          } else if (list.type === 'target') {
+            targetWordsSet.add(cleanWord);
+          }
         }
       });
     });
-    const flatActiveWords = Array.from(activeWordsSet);
+
+    // Known words always override/take precedence, so remove from target pool if present in known pool
+    knownWordsSet.forEach(w => targetWordsSet.delete(w));
+
+    const flatKnownWords = Array.from(knownWordsSet);
+    const flatTargetWords = Array.from(targetWordsSet);
 
     try {
-      // 4. Send API Call (Gemini returns a JSON string in this version)
+      // 3. Send API Call with separated known/target vocabulary pools
       const apiResponseString = await sendChatMessage({
         apiKey,
         modelName,
         systemInstruction: systemPrompt,
-        activeWords: flatActiveWords,
+        knownWords: flatKnownWords,
+        targetWords: flatTargetWords,
         history: updatedHistory,
         userMessage: currentMsgText
       });
 
-      // 4. Parse the structured JSON response
+      // 4. Parse the structured JSON response (containing text, definitions, userClarification)
       let parsedText = '';
       let definitionsMap = {};
+      let userClarification = { askedForClarification: false, targetWords: [] };
+
+      try {
+        const parsed = JSON.parse(apiResponseString);
+        parsedText = parsed.text || '';
+        if (Array.isArray(parsed.definitions)) {
+          parsed.definitions.forEach(item => {
+            if (item.word && item.definition) {
+              definitionsMap[item.word.trim()] = item.definition;
+            }
+          });
+        }
+        if (parsed.userClarification) {
+          userClarification = parsed.userClarification;
+        }
+      } catch (jsonErr) {
+        console.error('Failed to parse JSON response, falling back to raw output:', jsonErr);
+        parsedText = apiResponseString;
+      }
+
+      // 5. Update Vocabulary Lists based on User Clarification Metadata & Promotion Rules
+      setVocabLists(prevLists => {
+        const demListIdx = prevLists.findIndex(l => l.id === 'demonstrated');
+        const tarListIdx = prevLists.findIndex(l => l.id === 'target');
+        if (demListIdx === -1 || tarListIdx === -1) return prevLists;
+
+        const demList = prevLists[demListIdx];
+        const tarList = prevLists[tarListIdx];
+
+        const knownSet = new Set(demList.words);
+        const learningSet = new Set(tarList.words);
+        let changed = false;
+
+        // Parse Hebrew words user typed in their input message
+        const typedWords = (currentMsgText.match(/[\u0590-\u05FF]+/g) || [])
+          .map(w => stripNiqqud(w).trim())
+          .filter(w => w.length > 0);
+
+        if (userClarification.askedForClarification) {
+          // Case A: User explicitly asked about vocabulary in this message.
+          // Add asked-about words to Target/Learning list
+          const targetWords = (userClarification.targetWords || [])
+            .map(w => stripNiqqud(w).trim())
+            .filter(w => w.length > 0);
+
+          targetWords.forEach(word => {
+            if (!knownSet.has(word) && !learningSet.has(word)) {
+              learningSet.add(word);
+              changed = true;
+            }
+          });
+          
+          // Also add other words they typed (excluding clarification targets) to Demonstrated/Known list
+          typedWords.forEach(word => {
+            if (!targetWords.includes(word) && !knownSet.has(word)) {
+              knownSet.add(word);
+              if (learningSet.has(word)) {
+                learningSet.delete(word);
+              }
+              changed = true;
+            }
+          });
+        } else {
+          // Case B: Regular conversational message.
+          // Add typed words to Demonstrated list, applying Promotion Check:
+          typedWords.forEach(word => {
+            if (learningSet.has(word)) {
+              // Promote target word to demonstrated!
+              learningSet.delete(word);
+              knownSet.add(word);
+              changed = true;
+            } else if (!knownSet.has(word)) {
+              knownSet.add(word);
+              changed = true;
+            }
+          });
+        }
+
+        // Global Known status overrides Target list: remove any demonstrated/known words from learningSet
+        const allKnownWordsSet = new Set();
+        prevLists.forEach(list => {
+          if (list.type === 'demonstrated') {
+            list.words.forEach(w => allKnownWordsSet.add(w));
+          }
+        });
+        knownSet.forEach(w => allKnownWordsSet.add(w));
+
+        allKnownWordsSet.forEach(w => {
+          if (learningSet.has(w)) {
+            learningSet.delete(w);
+            changed = true;
+          }
+        });
+
+        if (!changed) return prevLists;
+
+        const copy = [...prevLists];
+        copy[demListIdx] = { ...demList, words: Array.from(knownSet) };
+        copy[tarListIdx] = { ...tarList, words: Array.from(learningSet) };
+
+        localStorage.setItem('hebrew_chatbot_all_vocab_lists', JSON.stringify(copy));
+        return copy;
+      });
 
       try {
         const parsed = JSON.parse(apiResponseString);
@@ -362,9 +460,34 @@ export default function App() {
   // Clickable word click handler
   const handleWordClick = (word, messageDefinitions) => {
     setSelectedWord(word);
-    const cleanWord = word.trim();
+    const cleanWord = stripNiqqud(word).trim();
     const definition = messageDefinitions ? messageDefinitions[cleanWord] : null;
     setSelectedWordDef(definition);
+
+    // If word clicked to view definition, add to 'target' (Learning) list automatically
+    if (cleanWord) {
+      setVocabLists(prevLists => {
+        const demListIdx = prevLists.findIndex(l => l.id === 'demonstrated');
+        const tarListIdx = prevLists.findIndex(l => l.id === 'target');
+        if (demListIdx === -1 || tarListIdx === -1) return prevLists;
+
+        // Known status overrides target status: skip if already on a known/demonstrated list
+        const isKnown = prevLists.some(list => list.type === 'demonstrated' && list.words.includes(cleanWord));
+        if (isKnown) return prevLists;
+
+        const tarList = prevLists[tarListIdx];
+        if (tarList.words.includes(cleanWord)) return prevLists;
+
+        const copy = [...prevLists];
+        copy[tarListIdx] = {
+          ...tarList,
+          words: [...tarList.words, cleanWord]
+        };
+
+        localStorage.setItem('hebrew_chatbot_all_vocab_lists', JSON.stringify(copy));
+        return copy;
+      });
+    }
   };
 
   return (
@@ -428,8 +551,41 @@ export default function App() {
             Toggle list items so the chatbot knows which vocabulary topics you have already studied.
           </p>
 
-          <div className="vocab-lists">
-            {vocabLists.map(list => (
+          {/* Group 1: Demonstrated / Known Lists */}
+          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
+            <span>🟢 Demonstrated / Known</span>
+          </div>
+          <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
+            {vocabLists.filter(l => l.type === 'demonstrated').map(list => (
+              <div 
+                key={list.id} 
+                className={`vocab-list-item`}
+                onClick={() => handleToggleVocabList(list.id)}
+                style={{
+                  borderColor: activeVocabIds.includes(list.id) ? 'var(--accent-primary)' : 'var(--border-light)',
+                  backgroundColor: activeVocabIds.includes(list.id) ? 'hsla(190, 85%, 42%, 0.05)' : 'var(--bg-primary)'
+                }}
+              >
+                <input 
+                  type="checkbox"
+                  className="vocab-list-checkbox"
+                  checked={activeVocabIds.includes(list.id)}
+                  onChange={() => {}} // toggled on container click
+                />
+                <div className="vocab-list-info">
+                  <span className="vocab-list-name">{list.name}</span>
+                  <span className="vocab-list-count">{list.words.length} words</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Group 2: Learning / Target Lists */}
+          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-tertiary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
+            <span>🎯 Learning / Target</span>
+          </div>
+          <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
+            {vocabLists.filter(l => l.type === 'target').map(list => (
               <div 
                 key={list.id} 
                 className={`vocab-list-item`}
@@ -615,7 +771,20 @@ export default function App() {
           apiKey={apiKey}
           modelName={modelName}
           definitionPrompt={definitionPrompt}
-          activeWords={Array.from(new Set(vocabLists.filter(list => activeVocabIds.includes(list.id)).flatMap(list => list.words)))}
+          knownWords={Array.from(
+            new Set(
+              vocabLists
+                .filter(list => activeVocabIds.includes(list.id) && list.type === 'demonstrated')
+                .flatMap(list => list.words)
+            )
+          )}
+          targetWords={Array.from(
+            new Set(
+              vocabLists
+                .filter(list => activeVocabIds.includes(list.id) && list.type === 'target')
+                .flatMap(list => list.words)
+            )
+          )}
           onClose={() => {
             setSelectedWord(null);
             setSelectedWordDef(null);

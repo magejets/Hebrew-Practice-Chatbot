@@ -19,7 +19,8 @@ export default function WordDefinitionModal({
   apiKey,
   modelName,
   definitionPrompt,
-  activeWords,
+  knownWords = [],
+  targetWords = [],
   onClose,
 }) {
   const [definition, setDefinition] = useState('');
@@ -53,7 +54,8 @@ export default function WordDefinitionModal({
           modelName,
           word,
           definitionPrompt,
-          activeWords,
+          knownWords,
+          targetWords,
         });
         setDefinition(result);
       } catch (err) {
@@ -65,7 +67,7 @@ export default function WordDefinitionModal({
     }
 
     fetchDefinition();
-  }, [word, localDefinition, apiKey, modelName, definitionPrompt, activeWords]);
+  }, [word, localDefinition, apiKey, modelName, definitionPrompt, knownWords, targetWords]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

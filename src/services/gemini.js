@@ -38,7 +38,8 @@ export async function sendChatMessage({
   apiKey,
   modelName = 'gemini-2.5-flash',
   systemInstruction,
-  activeWords = [],
+  knownWords = [],
+  targetWords = [],
   history = [],
   userMessage,
 }) {
@@ -48,10 +49,13 @@ export async function sendChatMessage({
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // Build vocabulary context string from a flat, de-duplicated array of active words
+  // Build vocabulary context string from flat de-duplicated arrays
   let vocabContext = '';
-  if (activeWords.length > 0) {
-    vocabContext = '\n\nHere is a list of Hebrew words the student is ALREADY familiar with. Try to use these words as much as possible. If you need to use words outside this list, circumlocute them in simple Hebrew:\n[' + activeWords.join(', ') + ']\n';
+  if (knownWords.length > 0) {
+    vocabContext += '\n\nKNOWN VOCABULARY:\nThe student is ALREADY familiar with the following Hebrew words. Try to construct your sentences using these words as much as possible:\n[' + knownWords.join(', ') + ']\n';
+  }
+  if (targetWords.length > 0) {
+    vocabContext += '\n\nTARGET VOCABULARY:\nThe student is actively trying to learn these Hebrew words. Weave them (1 or 2 words maximum) into the conversation ONLY if the topic naturally permits it. Never change the subject just to force-feed these words. If the user changes the topic, follow their lead immediately:\n[' + targetWords.join(', ') + ']\n';
   }
 
   // Instruct the model to return a structured JSON object
@@ -61,9 +65,14 @@ export async function sendChatMessage({
     '  "text": "Your conversational reply in Hebrew (strictly RTL, simple level, short sentences).",\n' +
     '  "definitions": [\n' +
     '    { "word": "Hebrew word from your reply", "definition": "A simple explanation of that word in Hebrew (suitable for beginners, exactly 1 short sentence, no English)." }\n' +
-    '  ]\n' +
+    '  ],\n' +
+    '  "userClarification": {\n' +
+    '    "askedForClarification": true / false,\n' +
+    '    "targetWords": ["Hebrew words from history/context the user asked to define/explain in their latest message"]\n' +
+    '  }\n' +
     '}\n' +
-    'Provide definitions for all unique, intermediate, or potentially new Hebrew words in your response text.';
+    'Provide definitions for all unique, intermediate, or potentially new Hebrew words in your response text.\n' +
+    'Determine if the user\'s latest message is asking for the meaning, translation, explanation, or definition of any Hebrew word. If so, set askedForClarification to true and extract those words in targetWords.';
 
   const fullSystemInstruction = systemInstruction + vocabContext + jsonInstruction;
 
@@ -109,9 +118,25 @@ export async function sendChatMessage({
           },
           required: ["word", "definition"]
         }
+      },
+      userClarification: {
+        type: "OBJECT",
+        description: "Metadata classifying if the user is asking to clarify vocabulary.",
+        properties: {
+          askedForClarification: { 
+            type: "BOOLEAN", 
+            description: "True if the user's latest message is explicitly asking to explain, translate, define, or clarify a Hebrew word." 
+          },
+          targetWords: {
+            type: "ARRAY",
+            description: "The Hebrew words/phrases the user is asking about.",
+            items: { type: "STRING" }
+          }
+        },
+        required: ["askedForClarification", "targetWords"]
       }
     },
-    required: ["text", "definitions"]
+    required: ["text", "definitions", "userClarification"]
   };
 
   try {
@@ -153,7 +178,8 @@ export async function getWordDefinition({
   modelName = 'gemini-2.5-flash',
   word,
   definitionPrompt,
-  activeWords = [],
+  knownWords = [],
+  targetWords = [],
 }) {
   if (!apiKey) {
     throw new Error('API Key is required.');
@@ -163,8 +189,8 @@ export async function getWordDefinition({
 
   // Let's customize the definition prompt with vocabulary constraints if provided
   let contextSnippet = '';
-  if (activeWords.length > 0) {
-    contextSnippet = '\nThe student is familiar with these Hebrew words. Try to define the word using only these or even simpler Hebrew words:\n[' + activeWords.join(', ') + ']\n';
+  if (knownWords.length > 0 || targetWords.length > 0) {
+    contextSnippet = '\nThe student is familiar with these Hebrew words. Try to define the word using only these or even simpler Hebrew words:\n[' + [...knownWords, ...targetWords].join(', ') + ']\n';
   }
 
   const systemInstruction = definitionPrompt + contextSnippet;
