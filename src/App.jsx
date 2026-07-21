@@ -822,7 +822,7 @@ export default function App() {
                 {msg.sender === 'assistant' ? (
                   <InteractiveText text={msg.text} onWordClick={(word) => handleWordClick(word, msg.definitions)} />
                 ) : (
-                  <div style={{ direction: 'ltr', textAlign: 'left' }}>{msg.text}</div>
+                  <div className="hebrew-text">{msg.text}</div>
                 )}
               </div>
             </div>
@@ -832,7 +832,7 @@ export default function App() {
             <div className="message-bubble-wrapper assistant">
               <div className="message-bubble assistant" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }}></div>
-                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>החבר מקליד... (Friend is typing...)</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>החבר מקליד...</span>
               </div>
             </div>
           )}
@@ -854,9 +854,8 @@ export default function App() {
           <div className="chat-input-wrapper">
             <input
               className="chat-input"
-              style={{ direction: 'ltr' }} // User inputs text, can be Hebrew or English
               type="text"
-              placeholder="הקלד הודעה כאן... (Type a message here...)"
+              placeholder="הקלד הודעה כאן..."
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               disabled={isGenerating}
@@ -868,14 +867,14 @@ export default function App() {
             disabled={isGenerating || !inputMessage.trim()}
             aria-label="Send Message"
           >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2.5" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
               className="send-icon"
               aria-hidden="true"
             >

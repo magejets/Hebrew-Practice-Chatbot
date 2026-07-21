@@ -85,14 +85,14 @@ export default function WordDefinitionModal({
             {isLoading && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                 <div className="spinner"></div>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', direction: 'ltr' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>
                   Loading explanation...
                 </span>
               </div>
             )}
             
             {error && (
-              <div className="error-text" style={{ textAlign: 'center', fontFamily: 'var(--font-sans)', direction: 'ltr' }}>
+              <div className="error-text" style={{ textAlign: 'center', fontFamily: 'var(--font-sans)' }}>
                 {error}
               </div>
             )}

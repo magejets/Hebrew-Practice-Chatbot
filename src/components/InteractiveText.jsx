@@ -27,7 +27,7 @@ export default function InteractiveText({ text, onWordClick }) {
         // If paragraph has no Hebrew, render it as standard left-to-right text
         if (!isHebrewPara) {
           return (
-            <p key={pIdx} style={{ direction: 'ltr', textAlign: 'left', margin: '0.4rem 0' }}>
+            <p key={pIdx} style={{ margin: '0.4rem 0' }}>
               {para}
             </p>
           );

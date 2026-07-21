@@ -202,8 +202,8 @@ export default function VocabEditorModal({
           </button>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
             {isMobile && isEditingList && currentList ? (
-              <span style={{ direction: 'rtl', display: 'inline-block' }}>
-                עריכה: <span style={{ direction: 'ltr', display: 'inline-block' }}>{currentList.name}</span>
+              <span>
+                עריכה: {currentList.name}
               </span>
             ) : (
               'ספריית אוצר מילים (Vocabulary Editor)'
