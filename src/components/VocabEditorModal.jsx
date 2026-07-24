@@ -8,14 +8,14 @@ import React, { useState, useEffect } from 'react';
  * 
  * @param {object} props
  * @param {Array<object>} props.vocabLists All current vocabulary lists
+ * @param {Array<object>} props.defaultVocabLists Factory-default preset vocabulary lists
  * @param {function} props.onSave Callback when changes are saved
- * @param {function} props.onResetDefaults Callback to restore presets
  * @param {function} props.onClose Callback to close the modal
  */
 export default function VocabEditorModal({
   vocabLists,
+  defaultVocabLists,
   onSave,
-  onResetDefaults,
   onClose,
 }) {
   // Local mutable copy of lists to allow editing without immediately saving to parent
@@ -63,6 +63,7 @@ export default function VocabEditorModal({
   // Retrieve current active list editing target
   const currentListIndex = lists.findIndex(l => l.id === selectedListId);
   const currentList = currentListIndex !== -1 ? lists[currentListIndex] : null;
+  const isSystemList = currentList && ['greetings', 'dining', 'family', 'demonstrated', 'target'].includes(currentList.id);
 
   // Handle changes to list name
   const handleListNameChange = (newName) => {
@@ -106,7 +107,7 @@ export default function VocabEditorModal({
   };
 
   // Add blank word row to current list
-  const handleAddWordRow = () => {
+  const handleAddWord = () => {
     if (currentListIndex === -1) return;
     setLists(prev => {
       const copy = [...prev];
@@ -120,7 +121,7 @@ export default function VocabEditorModal({
   };
 
   // Delete word row
-  const handleDeleteWordRow = (wordIdx) => {
+  const handleDeleteWord = (wordIdx) => {
     if (currentListIndex === -1) return;
     setLists(prev => {
       const copy = [...prev];
@@ -171,11 +172,26 @@ export default function VocabEditorModal({
     }
   };
 
-  // Reset to original preset lists
-  const handleResetToSystem = () => {
-    if (window.confirm('Reset all lists to system defaults? This will erase custom lists.')) {
-      onResetDefaults();
-      onClose();
+  // Reset the current active list's words to default or clear them
+  const handleResetCurrentList = () => {
+    if (currentListIndex === -1 || !currentList) return;
+
+    const defaultList = defaultVocabLists.find(d => d.id === currentList.id);
+    const isDefaultPreset = !!defaultList;
+
+    const confirmMessage = isDefaultPreset
+      ? `Are you sure you want to reset "${currentList.name}" to its original default words?`
+      : `Are you sure you want to clear all words in "${currentList.name}"?`;
+
+    if (window.confirm(confirmMessage)) {
+      setLists(prev => {
+        const copy = [...prev];
+        copy[currentListIndex] = {
+          ...copy[currentListIndex],
+          words: defaultList ? [...defaultList.words] : []
+        };
+        return copy;
+      });
     }
   };
 
@@ -239,7 +255,7 @@ export default function VocabEditorModal({
               className="btn-add-list"
               onClick={handleCreateNewList}
             >
-              ➕ Create New List
+              <b>+</b> Create New List
             </button>
           </aside>
 
@@ -319,7 +335,7 @@ export default function VocabEditorModal({
                       <button
                         type="button"
                         className="btn-delete-row"
-                        onClick={() => handleDeleteWordRow(wordIdx)}
+                        onClick={() => handleDeleteWord(wordIdx)}
                         title="Remove word"
                       >
                         &times;
@@ -334,15 +350,27 @@ export default function VocabEditorModal({
                   )}
                 </div>
 
-                {/* Add Word Button */}
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleAddWordRow}
-                  style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.9rem', padding: '0.5rem 1rem' }}
-                >
-                  ➕ Add Word Row
-                </button>
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '0.75rem', alignSelf: 'flex-start' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleAddWord}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+                  >
+                    <b>+</b> Add Word
+                  </button>
+                  {isSystemList && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={handleResetCurrentList}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.9rem', padding: '0.5rem 1rem', color: 'var(--accent-tertiary)' }}
+                    >
+                      Reset List
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
               <div className="empty-state">
@@ -363,9 +391,6 @@ export default function VocabEditorModal({
           )}
 
           <div className="vocab-editor-actions-right">
-            <button type="button" className="btn-secondary" onClick={handleResetToSystem}>
-              Reset Lists
-            </button>
             <button type="button" className="btn-secondary" onClick={onClose}>
               Cancel
             </button>

@@ -69,6 +69,17 @@ export default function WordDefinitionModal({
     fetchDefinition();
   }, [word, localDefinition, apiKey, modelName, definitionPrompt, knownWords, targetWords]);
 
+  // Extract definition text and examples list
+  let defText = '';
+  let examplesList = [];
+
+  if (typeof definition === 'object' && definition !== null) {
+    defText = definition.definition || '';
+    examplesList = Array.isArray(definition.examples) ? definition.examples : [];
+  } else if (typeof definition === 'string') {
+    defText = definition;
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -76,11 +87,11 @@ export default function WordDefinitionModal({
           <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
             &times;
           </button>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>פירוש מילה (Word Definition)</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>פירוש מילה</h3>
         </div>
         <div className="modal-body">
           <div className="modal-word-title">{word}</div>
-          
+
           <div className="modal-definition-content">
             {isLoading && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
@@ -90,16 +101,52 @@ export default function WordDefinitionModal({
                 </span>
               </div>
             )}
-            
+
             {error && (
               <div className="error-text" style={{ textAlign: 'center', fontFamily: 'var(--font-sans)' }}>
                 {error}
               </div>
             )}
-            
+
             {!isLoading && !error && (
-              <div style={{ width: '100%' }}>
-                {definition}
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ fontSize: '1.05rem', lineHeight: '1.6', color: 'var(--text-primary)' }}>
+                  {defText}
+                </div>
+
+                {examplesList.length > 0 && (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.1))',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
+                    textAlign: 'right'
+                  }}>
+                    <h4 style={{
+                      fontSize: '0.95rem',
+                      fontWeight: 700,
+                      color: 'var(--accent-color, #3b82f6)',
+                      margin: 0
+                    }}>
+                      דוגמות:
+                    </h4>
+                    <ul style={{
+                      margin: 0,
+                      paddingRight: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.4rem'
+                    }}>
+                      {examplesList.map((example, idx) => (
+                        <li key={idx} style={{ fontSize: '0.95rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
+                          {example}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>

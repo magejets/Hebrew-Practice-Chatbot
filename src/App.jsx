@@ -39,13 +39,13 @@ const INITIAL_CHAT_HISTORY = [
     sender: 'assistant',
     text: 'שלום! מה שלומך היום? נשמח לתרגל עברית ביחד.',
     definitions: {
-      'שלום': 'מילת ברכה ומפגש.',
-      'שלומך': 'איך אתה מרגיש, המצב שלך.',
-      'היום': 'ביום הנוכחי הזה.',
-      'נשמח': 'נהיה שמחים ומאושרים.',
-      'לתרגל': 'לעשות אימונים כדי ללמוד טוב יותר.',
-      'עברית': 'השפה שמדברים במדינת ישראל.',
-      'ביחד': 'אחד עם השני, בקבוצה ולא לבד.'
+      'שלום': { definition: 'מילת ברכה ומפגש.', examples: ['שלום, מה נשמע היום?', 'אמרתי שלום לחבר שלי.'] },
+      'שלומך': { definition: 'איך אתה מרגיש, המצב שלך.', examples: ['מה שלומך הבוקר?', 'אני שואל לשלומך.'] },
+      'היום': { definition: 'ביום הנוכחי הזה.', examples: ['היום יש מזג אוויר יפה.', 'מה אתה עושה היום?'] },
+      'נשמח': { definition: 'נהיה שמחים ומאושרים.', examples: ['נשמח לראות אותך בסוף השבוע.', 'נשמח לעזור לך ללמוד.'] },
+      'לתרגל': { definition: 'לעשות אימונים כדי ללמוד טוב יותר.', examples: ['חשוב לתרגל עברית כל יום.', 'אנחנו רוצים לתרגל שיחה ביחד.'] },
+      'עברית': { definition: 'השפה שמדברים במדינת ישראל.', examples: ['אני לומד עברית בבית הספר.', 'עברית היא שפה עתיקה ויפה.'] },
+      'ביחד': { definition: 'אחד עם השני, בקבוצה ולא לבד.', examples: ['נאכל ארוחת ערב ביחד.', 'אנחנו עובדים ביחד על הפרויקט.'] }
     }
   }
 ];
@@ -66,6 +66,7 @@ const DEFAULT_DEFINITION_PROMPT =
   `Explain the meaning of the Hebrew word/phrase: "{word}"
 Do not use the word "{word}" itself, or its immediate root variants, in your explanation.
 Explain it using only simple, basic Hebrew words suitable for a beginner student.
+Provide 2 simple example sentences in Hebrew that use the word "{word}".
 Do not use English or any other language.
 Keep the explanation brief (1 short sentence).`;
 
@@ -243,7 +244,7 @@ export default function App() {
         setActiveVocabIds(prev => [...prev, ...formattedLists.map(l => l.id)]);
         alert('Vocabulary list uploaded and activated successfully!');
       } catch (err) {
-        alert(`Error parsing JSON vocabulary list: ${err.message}. Format should be: [{"name": "List Name", "words": [{"hebrew": "מילה", "english": "word"}]}]`);
+        alert(`Error parsing JSON vocabulary list: ${err.message}. Format should be: [{"name": "List Name", "words": ["אחד", "שתיים"]}]`);
       }
     };
     reader.readAsText(file);
@@ -259,12 +260,6 @@ export default function App() {
     setActiveVocabIds(prev => prev.filter(id => newIds.includes(id)));
   };
 
-  // Reset vocabulary lists to original factory defaults
-  const handleResetVocabDefaults = () => {
-    setVocabLists(DEFAULT_VOCABULARY_LISTS);
-    localStorage.removeItem('hebrew_chatbot_all_vocab_lists');
-    setActiveVocabIds(['greetings']);
-  };
 
   // Clear Chat History
   const handleClearHistory = () => {
@@ -352,7 +347,10 @@ export default function App() {
         if (Array.isArray(parsed.definitions)) {
           parsed.definitions.forEach(item => {
             if (item.word && item.definition) {
-              definitionsMap[item.word.trim()] = item.definition;
+              definitionsMap[item.word.trim()] = {
+                definition: item.definition,
+                examples: Array.isArray(item.examples) ? item.examples : []
+              };
             }
           });
         }
@@ -385,9 +383,10 @@ export default function App() {
         if (userClarification.askedForClarification) {
           // Case A: User explicitly asked about vocabulary in this message.
           // Add asked-about words to Target/Learning list
+          const hebrewRegex = /[\u0590-\u05FF]/;
           const targetWords = (userClarification.targetWords || [])
             .map(w => stripNiqqud(w).trim())
-            .filter(w => w.length > 0);
+            .filter(w => w.length > 0 && hebrewRegex.test(w));
 
           targetWords.forEach(word => {
             if (!knownSet.has(word) && !learningSet.has(word)) {
@@ -543,7 +542,7 @@ export default function App() {
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Settings & Vocab</h2>
-          {isMobile ? (
+          {isMobile && (
             <button
               className="sidebar-close-btn"
               onClick={() => setIsSidebarOpen(false)}
@@ -552,8 +551,6 @@ export default function App() {
             >
               ✕
             </button>
-          ) : (
-            <span style={{ fontSize: '1.5rem' }}>⚙️</span>
           )}
         </div>
 
@@ -634,7 +631,7 @@ export default function App() {
 
               {/* Group 1: Demonstrated / Known Lists */}
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
-                <span>🟢 Demonstrated / Known</span>
+                <span>Demonstrated / Known</span>
               </div>
               <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
                 {vocabLists.filter(l => l.type === 'demonstrated').map(list => (
@@ -663,7 +660,7 @@ export default function App() {
 
               {/* Group 2: Learning / Target Lists */}
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-tertiary)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
-                <span>🎯 Learning / Target</span>
+                <span>Learning / Target</span>
               </div>
               <div className="vocab-lists" style={{ marginBottom: '1.25rem' }}>
                 {vocabLists.filter(l => l.type === 'target').map(list => (
@@ -697,10 +694,10 @@ export default function App() {
                   onClick={() => setIsVocabEditorOpen(true)}
                   style={{ flexGrow: 1 }}
                 >
-                  ✏️ Edit Lists
+                  Edit Lists
                 </button>
                 <label className="btn-upload" style={{ margin: 0, flexGrow: 1 }}>
-                  📤 Upload JSON
+                  Upload JSON
                   <input
                     type="file"
                     accept=".json"
@@ -709,9 +706,27 @@ export default function App() {
                   />
                 </label>
               </div>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                Upload format: Array of list items: <br />
-                <code>{'[{"name": "My Words", "words": [{"hebrew": "לחם", "english": "bread"}]}]'}</code>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'left', direction: 'ltr' }}>
+                Upload format: Array of list items:
+                <pre style={{
+                  margin: '0.4rem 0 0 0',
+                  padding: '0.5rem',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'monospace',
+                  fontSize: '0.65rem',
+                  lineHeight: '1.3',
+                  whiteSpace: 'pre-wrap'
+                }}>
+{`[
+  {
+    "name": "My Words",
+    "words": ["לחם", "מים"]
+  }
+]`}
+                </pre>
               </p>
             </div>
           </div>
@@ -918,8 +933,8 @@ export default function App() {
       {isVocabEditorOpen && (
         <VocabEditorModal
           vocabLists={vocabLists}
+          defaultVocabLists={DEFAULT_VOCABULARY_LISTS}
           onSave={handleSaveVocabLists}
-          onResetDefaults={handleResetVocabDefaults}
           onClose={() => setIsVocabEditorOpen(false)}
         />
       )}
