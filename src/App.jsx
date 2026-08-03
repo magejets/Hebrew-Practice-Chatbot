@@ -52,14 +52,13 @@ const INITIAL_CHAT_HISTORY = [
 
 // Default Chat Prompt approved by user
 const DEFAULT_CHAT_PROMPT =
-  `You are a native-born Israeli who has kindly agreed to help your friend practice their Hebrew. They are a beginner.
-Your absolute, most important rule is that you must ALWAYS speak and reply in the Hebrew language. Do not use English in your replies.
-You must speak at the friend's level, which you can infer from the complexity of the vocabulary and grammar they use in the conversation context, and from the vocabulary lists provided.
+  `You are a native Hebrew speaker chatting with a friend. Always reply in Hebrew. Do not use English in your replies.
+Match the level of Hebrew complexity used by your friend.
 
 Keep your responses brief (1-3 short sentences maximum per turn). Avoid large walls of text.
 Use clear, simple spacing.
-Engage in pleasant conversation by answering their questions or asking them questions.
-If they ask for clarification on a word, circumlocute (explain it using simpler Hebrew words that they are likely to know), and only as a last resort, describe a simple physical image or concept.`;
+Focus on having a natural, continuous conversation based on what your friend writes.
+If your friend asks for clarification on a Hebrew word, explain it simply in Hebrew using basic words.`;
 
 // Default Word Definition Prompt approved by user
 const DEFAULT_DEFINITION_PROMPT =
@@ -720,7 +719,7 @@ export default function App() {
                   lineHeight: '1.3',
                   whiteSpace: 'pre-wrap'
                 }}>
-{`[
+                  {`[
   {
     "name": "My Words",
     "words": ["לחם", "מים"]

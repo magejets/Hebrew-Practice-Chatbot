@@ -52,10 +52,10 @@ export async function sendChatMessage({
   // Build vocabulary context string from flat de-duplicated arrays
   let vocabContext = '';
   if (knownWords.length > 0) {
-    vocabContext += '\n\nKNOWN VOCABULARY:\nThe student is ALREADY familiar with the following Hebrew words. Try to construct your sentences using these words as much as possible:\n[' + knownWords.join(', ') + ']\n';
+    vocabContext += '\n\nFAMILIAR WORDS:\nYour friend is familiar with the following Hebrew words. Write your responses using a majority of these words to keep the language simple and accessible:\n[' + knownWords.join(', ') + ']\n';
   }
   if (targetWords.length > 0) {
-    vocabContext += '\n\nTARGET VOCABULARY:\nThe student is actively trying to learn these Hebrew words. Weave them (1 or 2 words maximum) into the conversation ONLY if the topic naturally permits it. Never change the subject just to force-feed these words. If the user changes the topic, follow their lead immediately:\n[' + targetWords.join(', ') + ']\n';
+    vocabContext += '\n\nSUGGESTED WORDS:\nYou can occasionally weave in 1 or 2 of these Hebrew words ONLY if they naturally fit the current topic of conversation. Do not change the subject or go out of your way to use them:\n[' + targetWords.join(', ') + ']\n';
   }
 
   // Format conversation history for Google Generative AI SDK
